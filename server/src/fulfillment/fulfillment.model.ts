@@ -6,6 +6,7 @@ import {
   integer,
   sqliteTable,
   text,
+  type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core';
 import { crmSkus } from '../catalog/catalog.model.js';
 import { crmOrders } from '../orders/orders.model.js';
@@ -86,15 +87,21 @@ export const crmDeliveries = sqliteTable(
       .notNull()
       .references(() => crmOrders.id, { onDelete: 'cascade' }),
     qty: integer('qty').notNull(),
+    /** Set on a negative row that corrects an overstated confirmation (FDSK-170). */
+    corrects_delivery_id: text('corrects_delivery_id').references(
+      (): AnySQLiteColumn => crmDeliveries.id,
+    ),
+    reason: text('reason').notNull().default(''),
     action_id: text('action_id').notNull(),
     created_at: text('created_at').notNull(),
   },
   (t) => [
     index('deliveries_shipment_line_id_idx').on(t.shipment_line_id),
     index('deliveries_order_id_idx').on(t.order_id),
+    index('deliveries_corrects_delivery_idx').on(t.corrects_delivery_id),
     check(
       'deliveries_qty_check',
-      sql`typeof(${t.qty}) = 'integer' and ${t.qty} > 0`,
+      sql`typeof(${t.qty}) = 'integer' and ((${t.qty} > 0 and ${t.corrects_delivery_id} is null) or (${t.qty} < 0 and ${t.corrects_delivery_id} is not null))`,
     ),
   ],
 );
@@ -139,6 +146,22 @@ export class ShipmentQuantity {
   ) {}
   get awaitingDelivery() {
     return this.dispatched - this.delivered;
+  }
+  /**
+   * FDSK-170: a confirmed quantity can only be lowered, and never below the
+   * units already returned (FUL-001: r ≤ d ≤ s).
+   */
+  assertCorrectable(correctedQty: number, returned: number) {
+    if (correctedQty >= this.delivered)
+      fail(
+        'NOTHING_TO_CORRECT',
+        'The corrected quantity must be lower than the confirmed delivery',
+      );
+    if (correctedQty < returned)
+      fail(
+        'RETURNED_UNITS',
+        'Returned units cannot exceed the corrected delivery',
+      );
   }
   assertDeliverable(qty: number) {
     if (qty > this.awaitingDelivery)
