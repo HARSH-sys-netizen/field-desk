@@ -8,13 +8,13 @@ Harsh Bang — Tejas AI Engineering take-home, _Business Rules Engine_.
 2. [Generated rulebook](docs/solution/rulebook.md) — every business rule in plain language, with the scenario count.
 3. [`server/src/rules/rulebook.ts`](server/src/rules/rulebook.ts) — the same rules as code.
 4. [Decision guide](docs/solution/decision-guide.md) — when this level of framework is worth it.
-5. `git log --reverse 5f4651d^..main` — the story, one logical step per commit.
+5. `git log --reverse 4c4992c^..main` — the story, one logical step per commit.
 
 ## Deliverables map
 
 | Brief item                                              | Where                                                                                                                                                                                                                                                   |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Private repo, original history kept                  | This repo; upstream history is intact below `5f4651d`                                                                                                                                                                                                   |
+| 1. Private repo, original history kept                  | This repo; upstream history is intact below `4c4992c`                                                                                                                                                                                                   |
 | 2. Bonus: two solutions                                 | `solution-b-middle-ground` (refactor + features, no framework) and `main` (adds the rulebook layer). Compared in §8 of the final architecture                                                                                                           |
 | 3. Decision tree / metrics                              | [decision-guide.md](docs/solution/decision-guide.md)                                                                                                                                                                                                    |
 | 4. Architecture and its evolution, committed as written | [01 first draft](docs/solution/01-architecture-first-draft.md) → [02 refined](docs/solution/02-architecture-refined-draft.md) → [03 post-research](docs/solution/03-architecture-post-research.md) → [04 final](docs/solution/04-architecture-final.md) |
@@ -41,7 +41,7 @@ Screenshots of both flows are in [docs/solution/screenshots](docs/solution/scree
 
 ## Honesty notes
 
-- **Built with a coding agent.** All code and documents were produced in one session with Claude (Opus 5.5) acting as the coding agent, directed and reviewed by me. The commit history is that session as it happened.
+- **Built with a coding agent.** All code and documents were produced in one session with Claude (Opus 5.5) acting as the coding agent, directed and reviewed by me. The commit history is that session as it happened; commits after the upstream history are authored by Claude because the agent made them. Authorship was set on those commits once at the end of the session (dates, order and messages unchanged), which is why their IDs differ from any earlier copy.
 - **The four architecture drafts were written minutes apart** (commit times 18:56–19:34), not over days. They are genuine stages — draft 1 before reading the code, draft 2 after, draft 3 after weighing alternatives, draft 4 after building — but the evolution was fast because the agent did the reading.
 - **The upstream app was already well structured.** Most of the value here is in finding where branching actually comes from (stage 2) rather than in a large framework.
 - **Limits I know about** are listed in §9 of the final architecture, e.g. guards cover state gates but not quantity/money rules, and the scenario count assumes independent states.
