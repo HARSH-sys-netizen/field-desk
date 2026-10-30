@@ -9,7 +9,11 @@ import { getOptionsToken } from '@nestjs/throttler';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import type { CustomerSnapshot } from '@crm/shared/crm';
+import type {
+  CrmBootstrap,
+  CustomerSnapshot,
+  OrderDetail,
+} from '@crm/shared/crm';
 import { DatabaseService } from '../src/database/database.service.js';
 import { UsersService } from '../src/users/users.service.js';
 import { configureApp } from '../src/configure-app.js';
@@ -297,6 +301,247 @@ describe('Corrections: FDSK-169 and FDSK-170', { concurrency: false }, () => {
         'REJECTED',
       );
       assert.equal(again.errors[0]!.code, 'RECEIPT_MOVED');
+    });
+  });
+  describe('FDSK-170 correct an overstated delivery confirmation', () => {
+    const ten = [{ skuId: 'sku-a', qty: 10, unitPricePaise: 10000 }];
+    const detail = (orderId: string) =>
+      desk.read<OrderDetail>(`orders/${orderId}`);
+    function correct(
+      orderId: string,
+      shipmentId: string,
+      shipmentLineId: string,
+      deliveredQty: number,
+    ) {
+      return {
+        type: 'CORRECT_DELIVERY' as const,
+        payload: {
+          orderId,
+          shipmentId,
+          items: [{ shipmentLineId, deliveredQty }],
+          reason: 'Customer received six boxes; four still in transit',
+        },
+      };
+    }
+    async function overstated(customerId: string) {
+      const orderId = await desk.order(customerId, ten);
+      const shipment = await desk.ship(orderId);
+      return {
+        orderId,
+        shipmentId: shipment.id,
+        lineId: shipment.lines[0]!.id,
+      };
+    }
+
+    it('corrects ten delivered boxes to six and lets Warehouse confirm the rest', async () => {
+      const customer = await desk.createCustomer();
+      const { orderId, shipmentId, lineId } = await overstated(customer.id);
+      assert.equal(
+        (await desk.snapshot(customer.id)).summary.outstandingPaise,
+        100000,
+      );
+
+      await desk.apply(correct(orderId, shipmentId, lineId, 6), 'KAM');
+      let order = await detail(orderId);
+      let shipment = order.shipments.find((row) => row.id === shipmentId)!;
+      assert.equal(shipment.status, 'DISPATCHED');
+      assert.equal(shipment.lines[0]!.delivered, 6);
+      assert.equal(order.lines[0]!.delivered, 6);
+      const listed = await desk.read<CrmBootstrap>('bootstrap');
+      assert.equal(
+        listed.orders.find((row) => row.id === orderId)!.fulfillmentStatus,
+        'PARTIALLY_DELIVERED',
+      );
+      let state = await desk.snapshot(customer.id);
+      assertConsistent(state);
+      assert.equal(state.summary.outstandingPaise, 60000);
+      assert.deepEqual(
+        state.ledger.finance.map((row) => [row.kind, row.amount_paise]),
+        [
+          ['DELIVERY', 100000],
+          ['DELIVERY_CORRECTION', -40000],
+        ],
+      );
+
+      await desk.apply(
+        {
+          type: 'CONFIRM_DELIVERY',
+          payload: {
+            orderId,
+            shipmentId,
+            items: [{ shipmentLineId: lineId, qty: 4 }],
+          },
+        },
+        'WAREHOUSE',
+      );
+      order = await detail(orderId);
+      shipment = order.shipments.find((row) => row.id === shipmentId)!;
+      assert.equal(shipment.status, 'DELIVERED');
+      state = await desk.snapshot(customer.id);
+      assertConsistent(state);
+      assert.equal(state.summary.outstandingPaise, 100000);
+    });
+
+    it('releases cash and points earned on the units that were not delivered', async () => {
+      const customer = await desk.createCustomer();
+      const { orderId, shipmentId, lineId } = await overstated(customer.id);
+      await desk.receive(customer.id, 100000);
+      assert.equal(
+        (await desk.snapshot(customer.id)).summary.points.available,
+        10000,
+      );
+
+      await desk.apply(correct(orderId, shipmentId, lineId, 6), 'KAM');
+      let state = await desk.snapshot(customer.id);
+      assertConsistent(state);
+      assert.equal(state.summary.outstandingPaise, 0);
+      assert.equal(state.summary.unappliedCashPaise, 40000);
+      assert.equal(state.summary.netBalancePaise, -40000);
+      assert.deepEqual(state.summary.points, {
+        locked: 4000,
+        available: 6000,
+        redeemed: 0,
+        clawbackPending: 0,
+      });
+
+      // Confirming the four boxes later re-allocates the advance (WF-002).
+      await desk.apply(
+        {
+          type: 'CONFIRM_DELIVERY',
+          payload: {
+            orderId,
+            shipmentId,
+            items: [{ shipmentLineId: lineId, qty: 4 }],
+          },
+        },
+        'WAREHOUSE',
+      );
+      state = await desk.snapshot(customer.id);
+      assertConsistent(state);
+      assert.equal(state.summary.netBalancePaise, 0);
+      assert.equal(state.summary.points.available, 10000);
+    });
+
+    it('releases cash before redeemed points, as returns do (WF-003 order)', async () => {
+      const customer = await desk.createCustomer();
+      const { orderId, shipmentId, lineId } = await overstated(customer.id);
+      await desk.receive(customer.id, 60000);
+      const charge = (await desk.snapshot(customer.id)).summary.charges[0]!;
+      await desk.apply(
+        {
+          type: 'REDEEM_POINTS',
+          payload: {
+            customerId: customer.id,
+            chargeId: charge.id,
+            points: 4000,
+          },
+        },
+        'ACCOUNTS',
+      );
+      await desk.apply(correct(orderId, shipmentId, lineId, 6), 'KAM');
+      const state = await desk.snapshot(customer.id);
+      assertConsistent(state);
+      assert.equal(state.summary.unappliedCashPaise, 4000);
+      assert.equal(state.summary.points.redeemed, 4000);
+      assert.equal(state.summary.charges[0]!.outstandingPaise, 0);
+    });
+
+    it('corrects the latest confirmation first when there were several', async () => {
+      const customer = await desk.createCustomer();
+      const orderId = await desk.order(customer.id, ten);
+      const shipment = await desk.ship(orderId, [10], [5]);
+      const lineId = shipment.lines[0]!.id;
+      await desk.apply(
+        {
+          type: 'CONFIRM_DELIVERY',
+          payload: {
+            orderId,
+            shipmentId: shipment.id,
+            items: [{ shipmentLineId: lineId, qty: 5 }],
+          },
+        },
+        'WAREHOUSE',
+      );
+      await desk.apply(correct(orderId, shipment.id, lineId, 6), 'KAM');
+      const state = await desk.snapshot(customer.id);
+      assertConsistent(state);
+      const [first, second, adjustment] = state.ledger.finance;
+      assert.equal(adjustment!.kind, 'DELIVERY_CORRECTION');
+      assert.equal(adjustment!.adjusts_id, second!.id);
+      assert.notEqual(adjustment!.adjusts_id, first!.id);
+      assert.equal(adjustment!.amount_paise, -40000);
+    });
+
+    it('keeps returned units within the corrected delivery', async () => {
+      const customer = await desk.createCustomer();
+      const { orderId, shipmentId, lineId } = await overstated(customer.id);
+      await desk.apply(
+        {
+          type: 'RECORD_RETURN',
+          payload: {
+            orderId,
+            items: [{ shipmentLineId: lineId, qty: 3 }],
+            feePaise: 0,
+            reason: 'Damaged boxes',
+          },
+        },
+        'WAREHOUSE',
+      );
+      const tooLow = await desk.assertUnchanged(
+        await desk.envelope(correct(orderId, shipmentId, lineId, 2), 'KAM'),
+        customer.id,
+        'REJECTED',
+      );
+      assert.equal(tooLow.errors[0]!.code, 'RETURNED_UNITS');
+      await desk.apply(correct(orderId, shipmentId, lineId, 5), 'KAM');
+      const state = await desk.snapshot(customer.id);
+      assertConsistent(state);
+      assert.equal(state.summary.outstandingPaise, 20000);
+    });
+
+    it('rejects corrections that are not lowering a confirmed delivery', async () => {
+      const customer = await desk.createCustomer();
+      const { orderId, shipmentId, lineId } = await overstated(customer.id);
+      const cases: Array<[number, 'KAM' | 'WAREHOUSE', string]> = [
+        [6, 'WAREHOUSE', 'FORBIDDEN'],
+        [10, 'KAM', 'NOTHING_TO_CORRECT'],
+        [11, 'KAM', 'NOTHING_TO_CORRECT'],
+      ];
+      for (const [qty, role, code] of cases) {
+        const result = await desk.assertUnchanged(
+          await desk.envelope(correct(orderId, shipmentId, lineId, qty), role),
+          customer.id,
+          'REJECTED',
+        );
+        assert.equal(result.errors[0]!.code, code);
+      }
+      const other = await desk.order(customer.id, ten);
+      const otherLine = (await detail(other)).lines[0]!;
+      const started = await desk.apply(
+        {
+          type: 'START_LOADING',
+          payload: {
+            orderId: other,
+            items: [{ lineKey: otherLine.lineKey, qty: 2 }],
+          },
+        },
+        'WAREHOUSE',
+      );
+      const loadingShipment = (await detail(other)).shipments[0]!;
+      const notDispatched = await desk.assertUnchanged(
+        await desk.envelope(
+          correct(
+            other,
+            started.references.shipmentId!,
+            loadingShipment.lines[0]!.id,
+            0,
+          ),
+          'KAM',
+        ),
+        customer.id,
+        'REJECTED',
+      );
+      assert.equal(notDispatched.errors[0]!.code, 'SHIPMENT_STATE');
     });
   });
 });
