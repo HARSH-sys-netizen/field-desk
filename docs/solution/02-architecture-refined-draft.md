@@ -6,15 +6,15 @@ Stage 2 of 4. Written after running the app and its 251 API tests and reading ev
 
 The sample app is not spaghetti. It already has:
 
-| Concern | Where it lives today |
-| --- | --- |
-| Transaction, idempotency, version check | `ActionsService.execute` — one boundary for every command |
-| Value invariants (ACC-001, CRD-001, FUL-001) | Small models: `ChargeBalance`, `CreditBalance`, `ShipmentQuantity`, `ReturnQuantity` |
-| Post-commit invariant review | `AuditService.review` — every command is rolled back if any account check fails |
-| History (WF-001) | Append-only rows; negative rows linked by `adjusts_id` / `reversal_of_id` |
-| Ambiguity questions (7.2) | `DomainDecision` → `NEEDS_DECISION` with options (used by `CORRECT_DISPATCHED_ORDER`) |
+| Concern                                      | Where it lives today                                                                  |
+| -------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Transaction, idempotency, version check      | `ActionsService.execute` — one boundary for every command                             |
+| Value invariants (ACC-001, CRD-001, FUL-001) | Small models: `ChargeBalance`, `CreditBalance`, `ShipmentQuantity`, `ReturnQuantity`  |
+| Post-commit invariant review                 | `AuditService.review` — every command is rolled back if any account check fails       |
+| History (WF-001)                             | Append-only rows; negative rows linked by `adjusts_id` / `reversal_of_id`             |
+| Ambiguity questions (7.2)                    | `DomainDecision` → `NEEDS_DECISION` with options (used by `CORRECT_DISPATCHED_ORDER`) |
 
-So the first draft's "build an engine that evaluates every rule" would duplicate things that already work. The *state reconciliation engine* hint from the brief already exists in embryo: `(action, payload, state) → effects | decisions`.
+So the first draft's "build an engine that evaluates every rule" would duplicate things that already work. The _state reconciliation engine_ hint from the brief already exists in embryo: `(action, payload, state) → effects | decisions`.
 
 ## Where the explosion really is
 
