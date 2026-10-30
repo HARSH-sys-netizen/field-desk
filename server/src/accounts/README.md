@@ -6,7 +6,7 @@ Owns receivable entries, customer cash receipts, payment allocations, and accoun
 
 - [accounts.model.ts](accounts.model.ts): Drizzle mappings for charges, receipts, and allocations; the `ChargeBalance` value calculation.
 - [accounts.repository.ts](accounts.repository.ts): Typed posting persistence, receipt attribution, and charge queries.
-- [accounts.service.ts](accounts.service.ts): Receipt capture, FIFO cash allocation, account summaries, ledgers, and account list rows.
+- [accounts.service.ts](accounts.service.ts): Receipt capture, FIFO cash allocation, moving a payment to the right customer (FDSK-169, ACC-004) through the `payment_transfers` table, account summaries, ledgers, and account list rows.
 - [accounts.controller.ts](accounts.controller.ts): Authenticated account list, customer summary, and ledger reads.
 
 ## Coordination

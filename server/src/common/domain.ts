@@ -4,7 +4,7 @@ import type {
   OrderListRow,
   Customer,
 } from '@crm/shared/crm';
-import type { User, Role } from '@crm/shared';
+import type { User } from '@crm/shared';
 export type Payload<T extends CrmCommand['type']> = Extract<
   CrmCommand,
   { type: T }
@@ -46,10 +46,6 @@ export function safe(value: number) {
 export function distinct(ids: string[]) {
   if (new Set(ids).size !== ids.length)
     fail('DUPLICATE_ITEM', 'Submit each line only once');
-}
-export function authorize(c: ActionContext, ...roles: Role[]) {
-  if (!roles.includes(c.actor.role))
-    fail('FORBIDDEN', 'This operation requires a different role');
 }
 export function useOrder(c: ActionContext, order: OrderListRow | undefined) {
   if (!order) fail('NOT_FOUND', 'Order not found');

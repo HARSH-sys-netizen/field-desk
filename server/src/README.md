@@ -18,8 +18,10 @@
 | [Fulfillment](fulfillment/README.md)          | Owns physical shipments, loading quantities, dispatch evidence, incremental delivery confirmations, and authorized dispatch supplements. |
 | [Health](health/README.md)                    | Exposes a public database readiness check.                                                                                               |
 | [Orders](orders/README.md)                    | Owns commercial orders, immutable line revisions, revision approvals and rejections, and canceled demand.                                |
+| [Rules](rules/README.md)                      | Owns the declarative rulebook (who, when, reactions) and the engine that runs every action through it.                                   |
 | [Returns](returns/README.md)                  | Owns physical return documents, their returned quantities and values, and coordination of the resulting financial adjustments.           |
 | [Rewards](rewards/README.md)                  | Owns reward entitlement, point ledger buckets, redemption records, and recovery of entitlement that has already been spent.              |
+| [Settlement](settlement/README.md)            | Owns charge and receipt arithmetic and the WF-003 release order shared by returns and corrections.                                       |
 | [CLI scripts](scripts/README.md)              | Owns local administrator bootstrapping and repeat-safe development data creation.                                                        |
 | [Users](users/README.md)                      | Owns staff accounts, password storage, account creation, searchable staff lists, and administrator-controlled role and status changes.   |
 | [Workspace metadata](workspace/README.md)     | Exposes role-specific titles and descriptions for the Sales and KAM workspaces.                                                          |
@@ -30,7 +32,7 @@ Business modules keep models, typed repositories, services, controllers, and Nes
 
 Use only the layers a capability needs. Catalog serves repository reads directly. Workspace serves static metadata without a repository or service. Health has one infrastructure query. CRM Queries combines existing reads without inventing a model, repository, or command facade.
 
-Domain commands enter through Actions, which owns transaction/savepoint boundaries, idempotency, version advancement, and pre-commit review. Bootstrap and customer snapshot reads are composed by CRM Queries inside read transactions. Shared request and response contracts are imported from `@crm/shared`; database tooling discovers domain tables through `database/schema.ts`.
+Domain commands enter through Actions, which owns transaction/savepoint boundaries, idempotency, version advancement, and pre-commit review, and hands each command to Rules for its role, state and reaction rules. Bootstrap and customer snapshot reads are composed by CRM Queries inside read transactions. Shared request and response contracts are imported from `@crm/shared`; database tooling discovers domain tables through `database/schema.ts`.
 
 ## Related
 

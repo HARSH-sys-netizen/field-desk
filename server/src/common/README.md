@@ -4,7 +4,7 @@ Contains small shared execution types, domain errors, effect recording, and HTTP
 
 ## Implementation
 
-- [domain.ts](domain.ts): `ActionContext`, command payload types, domain failures and decisions, authorization checks, safe integer arithmetic, and before/after effect capture.
+- [domain.ts](domain.ts): `ActionContext`, command payload types, domain failures and decisions, the set of customers an action touches, safe integer arithmetic, and before/after effect capture.
 - [validation.pipe.ts](validation.pipe.ts): Transforms Zod validation failures into structured HTTP 400 responses.
 
 ## Coordination

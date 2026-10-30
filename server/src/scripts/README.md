@@ -9,6 +9,7 @@ Owns local administrator bootstrapping and repeat-safe development data creation
 - [seed-data.ts](seed-data.ts): Atomic dataset construction through explicit domain dependencies and Actions commands.
 - [seed.ts](seed.ts): CLI application context, active administrator selection, dependency assembly, and state summary output.
 - [seed.model.ts](seed.model.ts): The seed completion marker and saved dataset summary.
+- [rules-report.ts](rules-report.ts): Renders the rulebook as plain-language Markdown and counts naive versus pruned scenarios (`pnpm rules:report`).
 
 ## Coordination
 
