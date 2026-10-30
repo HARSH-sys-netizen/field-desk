@@ -45,6 +45,7 @@ export function OrderDetailPage() {
   const sales = ['ADMIN', 'SALES'].includes(actor.role);
   const commercial = ['ADMIN', 'KAM'].includes(actor.role);
   const warehouse = ['ADMIN', 'WAREHOUSE'].includes(actor.role);
+  const kam = ['ADMIN', 'KAM'].includes(actor.role);
   const dispatched = shipments.some((shipment) => shipment.dispatched_at);
   const canceled = order.status === 'CANCELLED';
   const open = lines.reduce((sum, line) => sum + line.open, 0);
@@ -282,6 +283,25 @@ export function OrderDetailPage() {
                         Confirm delivery
                       </Button>
                     )}
+                    {kam &&
+                      ['DISPATCHED', 'DELIVERED'].includes(shipment.status) &&
+                      shipment.lines.some(
+                        (line) => line.delivered > line.returned,
+                      ) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!ready}
+                          onClick={() =>
+                            setAction({
+                              type: 'CORRECT_DELIVERY',
+                              shipmentId: shipment.id,
+                            })
+                          }
+                        >
+                          Correct delivery
+                        </Button>
+                      )}
                   </div>
                   <div className="rounded-lg border">
                     <Table

@@ -26,11 +26,13 @@ const titles: Partial<Record<CommandType, string>> = {
   START_LOADING: 'Prepare shipment',
   DISPATCH_SHIPMENT: 'Dispatch shipment',
   CONFIRM_DELIVERY: 'Confirm delivery',
+  CORRECT_DELIVERY: 'Correct delivered quantity',
   CANCEL_REMAINDER: 'Cancel unshipped items',
   RECORD_RETURN: 'Record a return',
   CORRECT_DISPATCHED_ORDER: 'Record shipment correction',
   RECEIVE_CUSTOMER_PAYMENT: 'Record payment',
   ALLOCATE_PAYMENT: 'Allocate available cash',
+  MOVE_CUSTOMER_PAYMENT: 'Move payment to the right customer',
   REDEEM_POINTS: 'Redeem reward points',
   ISSUE_CREDIT_NOTE: 'Reserve customer credit',
   APPLY_CREDIT_NOTE: 'Apply credit',
@@ -73,6 +75,8 @@ export function ActivityDialog({
     'REVERSE_CREDIT_APPLICATION',
     'REVERSE_CREDIT_REFUND',
     'CORRECT_DISPATCHED_ORDER',
+    'CORRECT_DELIVERY',
+    'MOVE_CUSTOMER_PAYMENT',
   ].includes(type);
   const amountNeeded = [
     'RECEIVE_CUSTOMER_PAYMENT',
@@ -125,6 +129,23 @@ export function ActivityDialog({
               })),
             )
             .filter((line) => line.limit > 0);
+  const correctionRows =
+    type === 'CORRECT_DELIVERY'
+      ? (shipment?.lines ?? [])
+          .filter((line) => line.delivered > line.returned)
+          .map((line) => ({
+            id: line.id,
+            label:
+              data?.skus.find((sku) => sku.id === line.sku_id)?.name ??
+              'Product',
+            delivered: line.delivered,
+            returned: line.returned,
+          }))
+      : [];
+  const movedReceipt =
+    type === 'MOVE_CUSTOMER_PAYMENT'
+      ? snapshot.ledger.receipts.find((row) => row.id === entryId)
+      : undefined;
   const selectedCredit = summary.credits.find((row) => row.id === entryId);
   const reversalEntry =
     type === 'REVERSE_CREDIT_APPLICATION'
@@ -144,6 +165,7 @@ export function ActivityDialog({
       'CANCEL_REMAINDER',
       'RECORD_RETURN',
       'CORRECT_DISPATCHED_ORDER',
+      'CORRECT_DELIVERY',
     ].includes(type);
     const payload: Record<string, unknown> = orderAction
       ? { orderId: detail!.order.id }
@@ -165,8 +187,31 @@ export function ActivityDialog({
         return;
       }
     }
-    if (type === 'DISPATCH_SHIPMENT' || type === 'CONFIRM_DELIVERY')
+    if (
+      type === 'DISPATCH_SHIPMENT' ||
+      type === 'CONFIRM_DELIVERY' ||
+      type === 'CORRECT_DELIVERY'
+    )
       payload.shipmentId = shipmentId;
+    if (type === 'CORRECT_DELIVERY') {
+      payload.items = correctionRows
+        .map((line) => ({
+          shipmentLineId: line.id,
+          deliveredQty: Number(form.get(`delivered-${line.id}`)),
+        }))
+        .filter(
+          (item, index) =>
+            item.deliveredQty !== correctionRows[index]!.delivered,
+        );
+      if (!(payload.items as unknown[]).length) {
+        setError('Lower the delivered quantity on at least one item.');
+        return;
+      }
+    }
+    if (type === 'MOVE_CUSTOMER_PAYMENT') {
+      payload.receiptId = entryId;
+      payload.targetCustomerId = form.get('target');
+    }
     try {
       if (type === 'RECORD_RETURN') payload.feePaise = paise(form.get('fee'));
       if (amountNeeded) payload.amountPaise = paise(form.get('amount'));
@@ -267,6 +312,69 @@ export function ActivityDialog({
                 units have left the warehouse. The dispatched shipment will be
                 retained in the order history.
               </p>
+            )}
+            {type === 'CORRECT_DELIVERY' && (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Enter what the customer actually received. Units no longer
+                  counted as delivered stay dispatched and await delivery;
+                  Warehouse confirms them when they arrive. Charges, payments
+                  and points are adjusted automatically.
+                </p>
+                <div className="overflow-hidden rounded-lg border">
+                  <Table columns={['Item', 'Confirmed', 'Actually delivered']}>
+                    {correctionRows.map((line) => (
+                      <tr key={line.id}>
+                        <td className="min-w-40">{line.label}</td>
+                        <td className="text-muted-foreground">
+                          {line.delivered} delivered
+                          {line.returned ? ` · ${line.returned} returned` : ''}
+                        </td>
+                        <td>
+                          <Input
+                            className="w-24 bg-white"
+                            aria-label={`Delivered quantity for ${line.label}`}
+                            name={`delivered-${line.id}`}
+                            type="number"
+                            min={line.returned}
+                            max={line.delivered}
+                            step={1}
+                            defaultValue={line.delivered}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </Table>
+                </div>
+              </>
+            )}
+            {type === 'MOVE_CUSTOMER_PAYMENT' && movedReceipt && (
+              <>
+                <p className="rounded-md bg-muted p-3 text-sm">
+                  Payment {String(movedReceipt.reference)} of{' '}
+                  <strong>{money(Number(movedReceipt.amount_paise))}</strong>{' '}
+                  will be removed from this account's charges and recorded
+                  against the customer you choose, with the same bank reference.
+                  Both account histories keep the original entries.
+                </p>
+                <Field name="target" label="Customer who actually paid">
+                  <NativeSelect
+                    id="target"
+                    name="target"
+                    required
+                    className="w-full"
+                  >
+                    <option value="">Select customer</option>
+                    {(data?.customers ?? [])
+                      .filter((customer) => customer.id !== summary.customer.id)
+                      .map((customer) => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.name} · {customer.code}
+                        </option>
+                      ))}
+                  </NativeSelect>
+                </Field>
+              </>
             )}
             {type === 'ALLOCATE_PAYMENT' && (
               <p className="text-sm text-muted-foreground">

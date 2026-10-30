@@ -173,14 +173,50 @@ export function AccountPanel({
           />
           {tab === 'receipts' &&
             (ledger.receipts.length ? (
-              <Table columns={['Received', 'Payment reference', 'Amount']}>
-                {[...ledger.receipts].reverse().map((row) => (
-                  <tr key={String(row.id)}>
-                    <td>{date(row.created_at)}</td>
-                    <td className="font-medium">{String(row.reference)}</td>
-                    <td>{money(Number(row.amount_paise))}</td>
-                  </tr>
-                ))}
+              <Table columns={['Received', 'Payment reference', 'Amount', '']}>
+                {[...ledger.receipts].reverse().map((row) => {
+                  const movedTo = ledger.transfers.find(
+                    (transfer) => transfer.from_receipt_id === row.id,
+                  );
+                  const movedFrom = ledger.transfers.find(
+                    (transfer) => transfer.to_receipt_id === row.id,
+                  );
+                  return (
+                    <tr key={String(row.id)}>
+                      <td>{date(row.created_at)}</td>
+                      <td className="font-medium">
+                        {String(row.reference)}
+                        {movedTo && (
+                          <span className="block text-xs text-muted-foreground">
+                            Moved to another customer
+                          </span>
+                        )}
+                        {movedFrom && (
+                          <span className="block text-xs text-muted-foreground">
+                            Moved here from another customer
+                          </span>
+                        )}
+                      </td>
+                      <td>{money(Number(row.amount_paise))}</td>
+                      <td className="text-right">
+                        {accounts && !movedTo && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setAction({
+                                type: 'MOVE_CUSTOMER_PAYMENT',
+                                entryId: String(row.id),
+                              })
+                            }
+                          >
+                            Move payment
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </Table>
             ) : (
               <Empty
