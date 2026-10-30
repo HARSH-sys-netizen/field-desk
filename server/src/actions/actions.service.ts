@@ -21,6 +21,7 @@ import type { ActionContext as Context } from '../common/domain.js';
 import {
   useOrder,
   useCustomer,
+  touchedCustomers,
   fail,
   DomainFailure as Failure,
   DomainDecision as Decision,
@@ -106,6 +107,7 @@ export class ActionsService {
           requester,
           now: new Date().toISOString(),
           customerId: '',
+          relatedCustomerIds: [],
           effects: [],
           references: {},
           command: envelope.command,
@@ -222,39 +224,43 @@ export class ActionsService {
                 this.fulfillmentService.correct(c, envelope.command.payload);
                 break;
             }
-            this.customersRepository.updateCustomer(c, c.customerId, {
-              version:
-                this.accountsService.summary(c.customerId).customer.version + 1,
-            });
-            for (const order of this.ordersRepository.forCustomer(c.customerId))
-              this.ordersRepository.updateOrder(c, order.id, {
-                version: order.version + 1,
+            const failedChecks: string[] = [];
+            for (const customerId of touchedCustomers(c)) {
+              this.customersRepository.updateCustomer(c, customerId, {
+                version:
+                  this.accountsService.summary(customerId).customer.version + 1,
               });
-            result.aggregateVersions[c.customerId] =
-              this.customersRepository.findById(c.customerId)!.version;
-            for (const order of this.ordersRepository.forCustomer(c.customerId))
-              result.aggregateVersions[order.id] = order.version;
-            this.auditRepository.insertEvent(c, {
-              id: randomUUID(),
-              customer_id: c.customerId,
-              order_id: c.orderId ?? null,
-              actor_id: actor.id,
-              actor_name: actor.name,
-              requested_by: requester.id,
-              action_id: c.id,
-              type: envelope.command.type,
-              payload: JSON.stringify(envelope.command.payload),
-              occurred_at: c.now,
-            });
-            result.review = this.auditService.review(c.customerId);
-            const failedChecks = result.review.checks.filter(
-              (check) => !check.passed,
-            );
-            if (failedChecks.length)
-              fail(
-                'ACCOUNT_INCONSISTENT',
-                failedChecks.map((check) => check.label).join('; '),
+              for (const order of this.ordersRepository.forCustomer(customerId))
+                this.ordersRepository.updateOrder(c, order.id, {
+                  version: order.version + 1,
+                });
+              result.aggregateVersions[customerId] =
+                this.customersRepository.findById(customerId)!.version;
+              for (const order of this.ordersRepository.forCustomer(customerId))
+                result.aggregateVersions[order.id] = order.version;
+              this.auditRepository.insertEvent(c, {
+                id: randomUUID(),
+                customer_id: customerId,
+                order_id:
+                  customerId === c.customerId ? (c.orderId ?? null) : null,
+                actor_id: actor.id,
+                actor_name: actor.name,
+                requested_by: requester.id,
+                action_id: c.id,
+                type: envelope.command.type,
+                payload: JSON.stringify(envelope.command.payload),
+                occurred_at: c.now,
+              });
+              const review = this.auditService.review(customerId);
+              if (customerId === c.customerId) result.review = review;
+              failedChecks.push(
+                ...review.checks
+                  .filter((check) => !check.passed)
+                  .map((check) => check.label),
               );
+            }
+            if (failedChecks.length)
+              fail('ACCOUNT_INCONSISTENT', failedChecks.join('; '));
             this.auditService.enrich(c);
             result.trace.push(
               ...c.effects

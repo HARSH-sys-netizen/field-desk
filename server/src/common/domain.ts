@@ -15,6 +15,8 @@ export interface ActionContext {
   requester: User;
   now: string;
   customerId: string;
+  /** Other customer accounts this action changes (e.g. a payment move). */
+  relatedCustomerIds: string[];
   orderId?: string;
   effects: ActionResult['effects'];
   references: Record<string, string>;
@@ -59,6 +61,10 @@ export function useCustomer(c: ActionContext, customer: Customer | undefined) {
   if (!customer) fail('NOT_FOUND', 'Customer not found');
   c.customerId = customer.id;
   return customer;
+}
+/** Every customer account the action touched, primary first. */
+export function touchedCustomers(c: ActionContext) {
+  return [...new Set([c.customerId, ...c.relatedCustomerIds])];
 }
 export function recordInsert(
   c: ActionContext,

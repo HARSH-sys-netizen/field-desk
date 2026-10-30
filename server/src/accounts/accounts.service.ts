@@ -57,9 +57,9 @@ export class AccountsService {
 
     this.rewardsService.refresh(c);
   }
-  allocateCash(c: Context) {
+  allocateCash(c: Context, customerId = c.customerId) {
     for (const receipt of this.accountsRepository.receiptsForCustomer(
-      c.customerId,
+      customerId,
     )) {
       let available =
         receipt.amount_paise -
@@ -68,7 +68,7 @@ export class AccountsService {
       if (available < 0)
         fail('RECEIPT_MISMATCH', 'Receipt allocations exceed captured funds');
       for (const charge of this.accountsRepository.chargesInDueOrder(
-        c.customerId,
+        customerId,
       )) {
         if (!available) break;
         const take = Math.min(
@@ -82,7 +82,7 @@ export class AccountsService {
         if (take)
           this.accountsRepository.insertAllocation(c, {
             id: randomUUID(),
-            customer_id: c.customerId,
+            customer_id: customerId,
             receipt_id: receipt.id,
             charge_id: charge.id,
             amount_paise: take,
