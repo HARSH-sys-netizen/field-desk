@@ -55,7 +55,11 @@ export interface Guard {
   otherwise: { code: string; message: string };
 }
 
+export type Area =
+  'Customers' | 'Orders' | 'Fulfillment' | 'Accounts' | 'Credits' | 'Rewards';
+
 export interface Rule {
+  area: Area;
   /** What the action is for, in business words. */
   does: string;
   /** Roles besides Admin, who can perform every action. */

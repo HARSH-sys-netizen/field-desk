@@ -28,6 +28,7 @@ import {
 export const RULEBOOK = rulebook({
   // ── Customers ──────────────────────────────────────────────────────────
   UPDATE_CUSTOMER: {
+    area: 'Customers',
     does: "Change a customer's name or code",
     who: ['SALES', 'ACCOUNTS'],
     when: [],
@@ -37,6 +38,7 @@ export const RULEBOOK = rulebook({
 
   // ── Orders: commercial lifecycle (ORD-005) ─────────────────────────────
   PUNCH_ORDER: {
+    area: 'Orders',
     does: 'Create a draft order at agreed prices',
     who: ['SALES'],
     when: [],
@@ -44,6 +46,7 @@ export const RULEBOOK = rulebook({
     cites: ['CAT-002', 'ORD-005'],
   },
   EDIT_ORDER: {
+    area: 'Orders',
     does: 'Replace the order terms with a new revision',
     who: ['SALES'],
     when: [notDispatched, notCancelled],
@@ -51,6 +54,7 @@ export const RULEBOOK = rulebook({
     cites: ['ORD-003', 'ORD-005', 'ORD-006'],
   },
   SUBMIT_ORDER: {
+    area: 'Orders',
     does: 'Send the current revision for approval',
     who: ['SALES'],
     when: [
@@ -64,6 +68,7 @@ export const RULEBOOK = rulebook({
     cites: ['ORD-005'],
   },
   APPROVE_ORDER: {
+    area: 'Orders',
     does: 'Approve the exact current revision',
     who: ['KAM'],
     when: [
@@ -78,6 +83,7 @@ export const RULEBOOK = rulebook({
     cites: ['ORD-005', 'REW-001'],
   },
   REJECT_ORDER: {
+    area: 'Orders',
     does: 'Reject the exact current revision, with a reason',
     who: ['KAM'],
     when: [
@@ -92,6 +98,7 @@ export const RULEBOOK = rulebook({
     cites: ['ORD-005'],
   },
   CANCEL_REMAINDER: {
+    area: 'Orders',
     does: 'Cancel selected or all unshipped units, with a reason',
     who: ['SALES'],
     when: [],
@@ -101,6 +108,7 @@ export const RULEBOOK = rulebook({
 
   // ── Fulfillment (FUL-003…006) ──────────────────────────────────────────
   START_LOADING: {
+    area: 'Fulfillment',
     does: 'Reserve open units in a new loading batch',
     who: ['WAREHOUSE'],
     when: [currentRevisionApproved('The current revision needs approval')],
@@ -108,6 +116,7 @@ export const RULEBOOK = rulebook({
     cites: ['FUL-003', 'FUL-004', 'ORD-001'],
   },
   DISPATCH_SHIPMENT: {
+    area: 'Fulfillment',
     does: 'Confirm the whole loading batch left the warehouse',
     who: ['WAREHOUSE'],
     when: [
@@ -119,6 +128,7 @@ export const RULEBOOK = rulebook({
     cites: ['FUL-003', 'FUL-005'],
   },
   CONFIRM_DELIVERY: {
+    area: 'Fulfillment',
     does: 'Confirm dispatched units the customer received',
     who: ['WAREHOUSE'],
     when: [
@@ -133,6 +143,7 @@ export const RULEBOOK = rulebook({
     cites: ['FUL-001', 'FUL-006', 'WF-005', 'WF-002'],
   },
   CORRECT_DELIVERY: {
+    area: 'Fulfillment',
     does: 'Lower an overstated delivery confirmation (FDSK-170)',
     who: ['KAM'],
     when: [
@@ -147,6 +158,7 @@ export const RULEBOOK = rulebook({
     cites: ['FUL-001', 'WF-001', 'WF-005', 'WF-003', 'WF-002'],
   },
   RECORD_RETURN: {
+    area: 'Fulfillment',
     does: 'Receive delivered units back, with an explicit deduction',
     who: ['WAREHOUSE'],
     when: [],
@@ -155,6 +167,7 @@ export const RULEBOOK = rulebook({
     cites: ['RET-001', 'RET-002', 'WF-003', 'WF-002'],
   },
   CORRECT_DISPATCHED_ORDER: {
+    area: 'Fulfillment',
     does: 'Record authorized additional goods that were dispatched',
     who: ['KAM'],
     when: [hasDispatch],
@@ -165,6 +178,7 @@ export const RULEBOOK = rulebook({
 
   // ── Accounts (ACC-001…003) ──────────────────────────────────────────────
   RECEIVE_CUSTOMER_PAYMENT: {
+    area: 'Accounts',
     does: 'Record money received from a customer',
     who: ['ACCOUNTS'],
     when: [],
@@ -173,6 +187,7 @@ export const RULEBOOK = rulebook({
     cites: ['ACC-002', 'ACC-003', 'WF-002'],
   },
   ALLOCATE_PAYMENT: {
+    area: 'Accounts',
     does: 'Apply free cash to the oldest outstanding charges',
     who: ['ACCOUNTS'],
     when: [],
@@ -181,6 +196,7 @@ export const RULEBOOK = rulebook({
     cites: ['ACC-003', 'WF-002'],
   },
   MOVE_CUSTOMER_PAYMENT: {
+    area: 'Accounts',
     does: 'Move a payment recorded against the wrong customer (FDSK-169)',
     who: ['ACCOUNTS'],
     when: [
@@ -197,6 +213,7 @@ export const RULEBOOK = rulebook({
 
   // ── Credits (CRD-001…006) ───────────────────────────────────────────────
   ISSUE_CREDIT_NOTE: {
+    area: 'Credits',
     does: 'Reserve free cash as explicit customer credit',
     who: ['ACCOUNTS'],
     when: [],
@@ -204,6 +221,7 @@ export const RULEBOOK = rulebook({
     cites: ['CRD-001', 'CRD-002', 'CRD-006'],
   },
   APPLY_CREDIT_NOTE: {
+    area: 'Credits',
     does: 'Settle a selected charge with credit',
     who: ['ACCOUNTS'],
     when: [],
@@ -211,6 +229,7 @@ export const RULEBOOK = rulebook({
     cites: ['CRD-001', 'CRD-003', 'ACC-001'],
   },
   REFUND_CREDIT_NOTE: {
+    area: 'Credits',
     does: 'Record a payout from open credit, with a bank reference',
     who: ['ACCOUNTS'],
     when: [],
@@ -218,6 +237,7 @@ export const RULEBOOK = rulebook({
     cites: ['CRD-001', 'CRD-004'],
   },
   REVERSE_CREDIT_APPLICATION: {
+    area: 'Credits',
     does: 'Undo part of a recorded credit application',
     who: ['ACCOUNTS'],
     when: [],
@@ -225,6 +245,7 @@ export const RULEBOOK = rulebook({
     cites: ['CRD-005', 'CRD-006'],
   },
   REVERSE_CREDIT_REFUND: {
+    area: 'Credits',
     does: 'Undo part of a recorded refund',
     who: ['ACCOUNTS'],
     when: [],
@@ -234,6 +255,7 @@ export const RULEBOOK = rulebook({
 
   // ── Rewards (REW-001…004) ───────────────────────────────────────────────
   REDEEM_POINTS: {
+    area: 'Rewards',
     does: 'Settle a selected charge with available points',
     who: ['SALES', 'ACCOUNTS'],
     when: [noClawbackPending],
