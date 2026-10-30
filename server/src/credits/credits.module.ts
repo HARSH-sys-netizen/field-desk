@@ -5,12 +5,14 @@ import { CustomersRepositoryModule } from '../customers/customers.repository.js'
 import { AccountsRepositoryModule } from '../accounts/accounts.repository.js';
 import { CreditsRepositoryModule } from '../credits/credits.repository.js';
 import { RewardsRepositoryModule } from '../rewards/rewards.repository.js';
+import { SettlementModule } from '../settlement/settlement.service.js';
 @Module({
   imports: [
     CustomersRepositoryModule,
     AccountsRepositoryModule,
     CreditsRepositoryModule,
     RewardsRepositoryModule,
+    SettlementModule,
   ],
   controllers: [CreditsController],
   providers: [CreditsService],

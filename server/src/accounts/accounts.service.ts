@@ -1,4 +1,3 @@
-import { ChargeBalance } from './accounts.model.js';
 import { CreditBalance } from '../credits/credits.model.js';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -15,6 +14,7 @@ import { RewardsRepository } from '../rewards/rewards.repository.js';
 import { ReturnsRepository } from '../returns/returns.repository.js';
 import { FulfillmentRepository } from '../fulfillment/fulfillment.repository.js';
 import { DatabaseService } from '../database/database.service.js';
+import { SettlementService } from '../settlement/settlement.service.js';
 import type { ActionContext as Context, Payload } from '../common/domain.js';
 import { authorize, useCustomer, fail, safe } from '../common/domain.js';
 
@@ -29,6 +29,7 @@ export class AccountsService {
     private readonly returnsRepository: ReturnsRepository,
     private readonly fulfillmentRepository: FulfillmentRepository,
     private readonly database: DatabaseService,
+    private readonly settlement: SettlementService,
   ) {}
   receive(c: Context, p: Payload<'RECEIVE_CUSTOMER_PAYMENT'>) {
     authorize(c, 'ACCOUNTS', 'ADMIN');
@@ -70,15 +71,13 @@ export class AccountsService {
         c.customerId,
       )) {
         if (!available) break;
-        const face =
-          charge.amount_paise +
-          this.accountsRepository.adjustmentsForCharge(charge.id);
-        const cash = this.accountsRepository.cashForCharge(charge.id);
-        const credit = this.creditsRepository.appliedToCharge(charge.id);
-        const redeemed = this.rewardsRepository.redeemedForCharge(charge.id);
         const take = Math.min(
           available,
-          Math.max(0, face - cash - credit - redeemed),
+          Math.max(
+            0,
+            this.settlement.balance(charge.id, charge.amount_paise)
+              .outstandingPaise,
+          ),
         );
         if (take)
           this.accountsRepository.insertAllocation(c, {
@@ -100,22 +99,12 @@ export class AccountsService {
     const charges = this.accountsRepository
       .chargesForCustomer(customerId)
       .map((charge) => {
-        const remainingPaise =
-          charge.amount_paise +
-          this.accountsRepository.adjustmentsForCharge(charge.id);
-        const cashPaidPaise = this.accountsRepository.cashForCharge(charge.id);
-        const credit = this.creditsRepository.appliedToCharge(charge.id);
-        const redeemed = this.rewardsRepository.redeemedForCharge(charge.id);
+        const balance = this.settlement.balance(charge.id, charge.amount_paise);
         return {
           ...charge,
-          remainingPaise,
-          cashPaidPaise,
-          outstandingPaise: new ChargeBalance(
-            remainingPaise,
-            cashPaidPaise,
-            credit,
-            redeemed,
-          ).outstandingPaise,
+          remainingPaise: balance.retainedPaise,
+          cashPaidPaise: balance.cashPaise,
+          outstandingPaise: balance.outstandingPaise,
         };
       });
     const credits = this.creditsRepository

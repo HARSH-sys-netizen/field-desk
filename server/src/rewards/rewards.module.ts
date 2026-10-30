@@ -7,6 +7,7 @@ import { AccountsRepositoryModule } from '../accounts/accounts.repository.js';
 import { CreditsRepositoryModule } from '../credits/credits.repository.js';
 import { OrdersRepositoryModule } from '../orders/orders.repository.js';
 import { ReturnsRepositoryModule } from '../returns/returns.repository.js';
+import { SettlementModule } from '../settlement/settlement.service.js';
 @Module({
   imports: [
     CustomersRepositoryModule,
@@ -15,6 +16,7 @@ import { ReturnsRepositoryModule } from '../returns/returns.repository.js';
     CreditsRepositoryModule,
     OrdersRepositoryModule,
     ReturnsRepositoryModule,
+    SettlementModule,
   ],
   controllers: [RewardsController],
   providers: [RewardsService],

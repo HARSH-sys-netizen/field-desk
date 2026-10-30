@@ -7,6 +7,7 @@ import { AccountsRepository } from '../accounts/accounts.repository.js';
 import { CreditsRepository } from '../credits/credits.repository.js';
 import { OrdersRepository } from '../orders/orders.repository.js';
 import { ReturnsRepository } from '../returns/returns.repository.js';
+import { SettlementService } from '../settlement/settlement.service.js';
 import type { ActionContext as Context, Payload } from '../common/domain.js';
 import { authorize, useCustomer, fail, safe } from '../common/domain.js';
 
@@ -19,6 +20,7 @@ export class RewardsService {
     private readonly creditsRepository: CreditsRepository,
     private readonly ordersRepository: OrdersRepository,
     private readonly returnsRepository: ReturnsRepository,
+    private readonly settlement: SettlementService,
   ) {}
   redeem(c: Context, p: Payload<'REDEEM_POINTS'>) {
     authorize(c, 'SALES', 'ACCOUNTS', 'ADMIN');
@@ -36,12 +38,10 @@ export class RewardsService {
         'CHARGE_NOT_FOUND',
         'Select an outstanding charge belonging to this customer',
       );
-    const due =
-      charge.amount_paise +
-      this.accountsRepository.adjustmentsForCharge(charge.id) -
-      this.accountsRepository.cashForCharge(charge.id) -
-      this.creditsRepository.appliedToCharge(charge.id) -
-      this.rewardsRepository.redeemedForCharge(charge.id);
+    const due = this.settlement.balance(
+      charge.id,
+      charge.amount_paise,
+    ).outstandingPaise;
     if (p.points > due)
       fail('AMOUNT_EXCEEDED', 'The redemption exceeds the outstanding charge');
     this.rewardsRepository.insertRedemption(c, {
