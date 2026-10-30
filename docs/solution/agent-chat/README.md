@@ -2,14 +2,14 @@
 
 Deliverable 5. The work was done in one session with **Claude (Anthropic, Opus 5.5)** running as an agent in the Claude app, with shell, file and headless-browser tools in a cloud workspace.
 
-- **Full transcript:** exported from the Claude app and committed next to this file as `transcript.md` (or `transcript.pdf`).
+- **Transcript:** [transcript.md](transcript.md) — written by the agent from its own conversation context: both user messages and the agent's replies verbatim, each tool call summarised in one line.
 - **Session log below:** written by the agent at the end of the session from its own steps, so a reviewer can map each commit to the instruction and decision behind it.
 
 ## Instruction
 
 > Do this please reqs each and every line ok and then proceed to make ok
 
-(with the assignment PDF attached). No further steering was given during the session; the agent made the judgment calls listed under "Decisions".
+(with the assignment PDF attached), followed at 19:45 by "Please do everything please". No other steering was given; the agent made the judgment calls listed under "Decisions".
 
 ## Session log (30 Oct 2026, IST)
 

@@ -72,7 +72,7 @@ Agent session (from the request time and commit timestamps, 30 Oct 2026, IST):
 | UI and browser verification                            | 19:25–19:32 (7 min)                         |
 | Final documents and verification                       | 19:32–19:45 (13 min)                        |
 
-My own time outside the agent session (reading the brief, reviewing the output, preparing for the call): _to be filled in by me before submission_.
+Outside the agent session I directed the work through two messages (18:50 and 19:45) and reviewed the result; that time was not tracked separately. The whole session ran from 18:50 to about 19:50 IST.
 
 ## AI workflow notes
 
