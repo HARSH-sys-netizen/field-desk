@@ -94,6 +94,8 @@ export class AuditService {
       reason = `Reserve ${row.amount_paise} paise owed to the customer as explicit credit. Receipt funding is retained; application or refund requires Accounts action.`;
     } else if (table === 'credit_funds') {
       reason = `Reserve ${row.amount_paise} paise of receipt ${row.receipt_id} for credit ${row.credit_note_id}, preventing reuse as unapplied cash.`;
+    } else if (table === 'payment_transfers') {
+      reason = `Move ${row.amount_paise} paise from receipt ${row.from_receipt_id} (customer ${row.from_customer_id}) to receipt ${row.to_receipt_id} (customer ${row.to_customer_id}). The original receipt and its released allocations stay recorded.`;
     } else if (table === 'payment_receipts') {
       reason = `Receive ${row.amount_paise} paise against customer ${row.customer_id}, reference ${row.reference}. No order is selected at capture.`;
     } else if (table === 'cancellations') {
@@ -331,9 +333,10 @@ export class AuditService {
         'Receipt cash is allocated or reserved at most once',
         allocated >= 0 &&
           reserved >= 0 &&
-          allocated + reserved <= receipt.amount_paise &&
+          allocated + reserved <=
+            this.accountsRepository.capacityOfReceipt(receipt) &&
           invalidPairs === 0,
-        `Received ${receipt.amount_paise}; allocated ${allocated}; reserved ${reserved} paise.`,
+        `Received ${receipt.amount_paise}; moved away ${receipt.amount_paise - this.accountsRepository.capacityOfReceipt(receipt)}; allocated ${allocated}; reserved ${reserved} paise.`,
         [receipt.id],
       );
     }

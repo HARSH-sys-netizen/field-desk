@@ -1,5 +1,5 @@
 import { Injectable, Module } from '@nestjs/common';
-import { and, asc, desc, eq, gt, inArray, lt, min, sum } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, lt, min, or, sum } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service.js';
 import { DatabaseModule } from '../database/database.module.js';
 import { insertionOrder } from '../database/query-order.js';
@@ -9,7 +9,9 @@ import {
   crmReceivableEntries,
   crmPaymentReceipts,
   crmPaymentAllocations,
+  crmPaymentTransfers,
 } from '../accounts/accounts.model.js';
+import type { Receipt } from '../accounts/accounts.model.js';
 
 @Injectable()
 export class AccountsRepository {
@@ -173,14 +175,90 @@ export class AccountsRepository {
       .orderBy(insertionOrder(crmReceivableEntries))
       .all();
   }
+  /** Money received by this customer: receipts less payments moved away. */
   receivedForCustomer(customerId: string) {
-    return safe(
+    const captured =
       this.db
         .select({ value: sum(crmPaymentReceipts.amount_paise).mapWith(Number) })
         .from(crmPaymentReceipts)
         .where(eq(crmPaymentReceipts.customer_id, customerId))
-        .get()?.value ?? 0,
+        .get()?.value ?? 0;
+    const movedAway =
+      this.db
+        .select({
+          value: sum(crmPaymentTransfers.amount_paise).mapWith(Number),
+        })
+        .from(crmPaymentTransfers)
+        .where(eq(crmPaymentTransfers.from_customer_id, customerId))
+        .get()?.value ?? 0;
+    return safe(captured - movedAway);
+  }
+  /** ACC-002 receipt value m_i: the captured amount less any amount moved to another account. */
+  capacityOfReceipt(receipt: Receipt) {
+    return safe(
+      receipt.amount_paise -
+        (this.db
+          .select({
+            value: sum(crmPaymentTransfers.amount_paise).mapWith(Number),
+          })
+          .from(crmPaymentTransfers)
+          .where(eq(crmPaymentTransfers.from_receipt_id, receipt.id))
+          .get()?.value ?? 0),
     );
+  }
+  findCustomerReceipt(id: string, customerId: string) {
+    return this.db
+      .select()
+      .from(crmPaymentReceipts)
+      .where(
+        and(
+          eq(crmPaymentReceipts.id, id),
+          eq(crmPaymentReceipts.customer_id, customerId),
+        ),
+      )
+      .get();
+  }
+  /** Net cash a receipt currently settles on each charge, oldest first-use first. */
+  cashByChargeForReceipt(receiptId: string) {
+    return this.db
+      .select({
+        charge_id: crmPaymentAllocations.charge_id,
+        n: sum(crmPaymentAllocations.amount_paise).mapWith(Number),
+      })
+      .from(crmPaymentAllocations)
+      .where(eq(crmPaymentAllocations.receipt_id, receiptId))
+      .groupBy(crmPaymentAllocations.charge_id)
+      .having(gt(sum(crmPaymentAllocations.amount_paise), 0))
+      .orderBy(min(insertionOrder(crmPaymentAllocations)))
+      .all()
+      .map((row) => ({ ...row, n: safe(row.n ?? 0) }));
+  }
+  transferOfReceipt(receiptId: string) {
+    return this.db
+      .select()
+      .from(crmPaymentTransfers)
+      .where(eq(crmPaymentTransfers.from_receipt_id, receiptId))
+      .get();
+  }
+  transfersForCustomer(customerId: string) {
+    return this.db
+      .select()
+      .from(crmPaymentTransfers)
+      .where(
+        or(
+          eq(crmPaymentTransfers.from_customer_id, customerId),
+          eq(crmPaymentTransfers.to_customer_id, customerId),
+        ),
+      )
+      .orderBy(insertionOrder(crmPaymentTransfers))
+      .all();
+  }
+  insertTransfer(
+    c: ActionContext,
+    row: typeof crmPaymentTransfers.$inferInsert,
+  ) {
+    this.db.insert(crmPaymentTransfers).values(row).run();
+    recordInsert(c, 'payment_transfers', row, false);
   }
   postedForCustomer(customerId: string) {
     return safe(

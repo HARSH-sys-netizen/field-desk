@@ -1,7 +1,7 @@
 import { Injectable, Module } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { ChargeBalance } from '../accounts/accounts.model.js';
-import type { ReceivableEntry } from '../accounts/accounts.model.js';
+import type { Receipt, ReceivableEntry } from '../accounts/accounts.model.js';
 import type { ActionContext } from '../common/domain.js';
 import { fail } from '../common/domain.js';
 import {
@@ -18,7 +18,7 @@ import {
 } from '../rewards/rewards.repository.js';
 
 /**
- * One place for the charge arithmetic of ACC-001:
+ * One place for the receipt (ACC-002) and charge (ACC-001) arithmetic:
  * b_j = v_j − c_j − k_j − z_j (retained − cash − credit − points).
  */
 @Injectable()
@@ -34,6 +34,14 @@ export class SettlementService {
       this.accountsRepository.cashForCharge(chargeId),
       this.creditsRepository.appliedToCharge(chargeId),
       this.rewardsRepository.redeemedForCharge(chargeId),
+    );
+  }
+  /** ACC-002 free cash of a receipt: u_i = m_i − a_i − f_i. */
+  freeCash(receipt: Receipt) {
+    return (
+      this.accountsRepository.capacityOfReceipt(receipt) -
+      this.accountsRepository.allocatedFromReceipt(receipt.id) -
+      this.creditsRepository.reservedFromReceipt(receipt.id)
     );
   }
   /**
