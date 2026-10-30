@@ -57,14 +57,92 @@ export class AccountsService {
 
     this.rewardsService.refresh(c);
   }
+  /**
+   * FDSK-169. A payment was recorded against the wrong customer. History is
+   * kept (WF-001) and settlement never crosses accounts (CUS-001):
+   * 1. release every charge the receipt settles on the source account;
+   * 2. close the source receipt's capacity with a transfer record;
+   * 3. open a linked receipt on the target with the same bank reference and
+   *    original receipt time, then allocate it there (WF-002: a receipt).
+   * Points earned from the moved cash follow REW-002/REW-003 on both sides.
+   */
+  move(c: Context, p: Payload<'MOVE_CUSTOMER_PAYMENT'>) {
+    authorize(c, 'ACCOUNTS', 'ADMIN');
+    useCustomer(c, this.customersRepository.findById(p.customerId));
+    if (p.targetCustomerId === c.customerId)
+      fail(
+        'SAME_CUSTOMER',
+        'Choose a different customer to receive the payment',
+      );
+    const target = this.customersRepository.findById(p.targetCustomerId);
+    if (!target) fail('NOT_FOUND', 'Target customer not found');
+    const receipt = this.accountsRepository.findCustomerReceipt(
+      p.receiptId,
+      c.customerId,
+    );
+    if (!receipt)
+      fail(
+        'RECEIPT_NOT_FOUND',
+        'Select a payment recorded against this customer',
+      );
+    if (this.accountsRepository.transferOfReceipt(receipt.id))
+      fail(
+        'RECEIPT_MOVED',
+        'This payment has already been moved to another customer',
+      );
+    if (this.creditsRepository.reservedFromReceipt(receipt.id))
+      fail(
+        'RECEIPT_FUNDS_CREDIT',
+        'This payment funds a credit note on this account; settle or refund that credit through Accounts before moving the payment',
+      );
+    const transferId = randomUUID();
+    for (const allocation of this.accountsRepository.cashByChargeForReceipt(
+      receipt.id,
+    ))
+      this.accountsRepository.insertAllocation(c, {
+        id: randomUUID(),
+        customer_id: c.customerId,
+        receipt_id: receipt.id,
+        charge_id: allocation.charge_id,
+        amount_paise: -allocation.n,
+        action_id: c.id,
+        created_at: c.now,
+      });
+    const movedReceiptId = randomUUID();
+    this.accountsRepository.insertReceipt(c, {
+      id: movedReceiptId,
+      customer_id: target.id,
+      amount_paise: receipt.amount_paise,
+      reference: receipt.reference,
+      action_id: c.id,
+      created_at: receipt.created_at,
+    });
+    this.accountsRepository.insertTransfer(c, {
+      id: transferId,
+      from_receipt_id: receipt.id,
+      to_receipt_id: movedReceiptId,
+      from_customer_id: c.customerId,
+      to_customer_id: target.id,
+      amount_paise: receipt.amount_paise,
+      reason: p.reason,
+      action_id: c.id,
+      created_at: c.now,
+    });
+    c.relatedCustomerIds.push(target.id);
+    c.references.transferId = transferId;
+    c.references.receiptId = movedReceiptId;
+    c.references.targetCustomerId = target.id;
+
+    this.allocateCash(c, target.id);
+
+    this.rewardsService.refresh(c);
+    this.rewardsService.refresh(c, target.id);
+  }
   allocateCash(c: Context, customerId = c.customerId) {
     for (const receipt of this.accountsRepository.receiptsForCustomer(
       customerId,
     )) {
-      let available =
-        receipt.amount_paise -
-        this.accountsRepository.allocatedFromReceipt(receipt.id) -
-        this.creditsRepository.reservedFromReceipt(receipt.id);
+      let available = this.settlement.freeCash(receipt);
       if (available < 0)
         fail('RECEIPT_MISMATCH', 'Receipt allocations exceed captured funds');
       for (const charge of this.accountsRepository.chargesInDueOrder(
@@ -128,11 +206,7 @@ export class AccountsService {
     const receipts = this.accountsRepository.receiptsByInsertion(customerId);
     const unappliedCashPaise = safe(
       receipts.reduce(
-        (sum, receipt) =>
-          sum +
-          receipt.amount_paise -
-          this.accountsRepository.allocatedFromReceipt(receipt.id) -
-          this.creditsRepository.reservedFromReceipt(receipt.id),
+        (sum, receipt) => sum + this.settlement.freeCash(receipt),
         0,
       ),
     );
@@ -178,6 +252,7 @@ export class AccountsService {
       returns: this.returnsRepository.forCustomer(customerId),
       corrections:
         this.fulfillmentRepository.correctionsForCustomer(customerId),
+      transfers: this.accountsRepository.transfersForCustomer(customerId),
     };
   }
   accounts(): CustomerAccountRow[] {

@@ -196,6 +196,9 @@ export class ActionsService {
               case 'ALLOCATE_PAYMENT':
                 this.accountsService.allocate(c, envelope.command.payload);
                 break;
+              case 'MOVE_CUSTOMER_PAYMENT':
+                this.accountsService.move(c, envelope.command.payload);
+                break;
               case 'REDEEM_POINTS':
                 this.rewardsService.redeem(c, envelope.command.payload);
                 break;

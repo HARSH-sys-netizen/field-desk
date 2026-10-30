@@ -83,6 +83,12 @@ export const crmActionSchema = z.discriminatedUnion('type', [
     reference: z.string().trim().min(1).max(200),
   }),
   action('ALLOCATE_PAYMENT', { customerId: id }),
+  action('MOVE_CUSTOMER_PAYMENT', {
+    customerId: id,
+    receiptId: id,
+    targetCustomerId: id,
+    reason,
+  }),
   action('REDEEM_POINTS', { customerId: id, chargeId: id, points: amount }),
   action('ISSUE_CREDIT_NOTE', { customerId: id, amountPaise: amount, reason }),
   action('APPLY_CREDIT_NOTE', {
@@ -341,6 +347,7 @@ export interface LedgerView {
   rewards: Array<Record<string, unknown>>;
   returns: Array<Record<string, unknown>>;
   corrections: Array<Record<string, unknown>>;
+  transfers: Array<Record<string, unknown>>;
 }
 export interface CrmBootstrap {
   customers: Customer[];
