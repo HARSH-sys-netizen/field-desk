@@ -6,7 +6,7 @@ A local CRM for sales, warehouse operations, customer accounts, and finance, bui
 | -------------- | ------------------------------------------------------------------------------------- |
 | Orders         | Commercial revisions, submission, approval, rejection, and cancellation               |
 | Fulfillment    | Loading, multiple shipments, partial deliveries, returns, and shipment corrections    |
-| Accounts       | Customer receipts, cash allocation, credits, applications, and recorded refunds       |
+| Accounts       | Customer receipts, cash allocation, payment moves, credits, applications, and refunds |
 | Rewards        | Locked and available points, redemption history, and pending recoveries               |
 | Activity       | Staff attribution, customer timelines, commercial revisions, and posting history      |
 | Administration | Email/password sign-in, user management, and Sales/KAM/Warehouse/Accounts/Admin roles |
@@ -14,6 +14,10 @@ A local CRM for sales, warehouse operations, customer accounts, and finance, bui
 Use customer and sales order tables to find records, open their detail pages, and manage orders through dedicated creation, editing, approval, cancellation, and fulfillment forms. Customer account pages group payments, credits, refunds, and rewards. Local development data includes customer and order histories across approval, fulfillment, and settlement states.
 
 See [development setup](CONTRIBUTING.md) to run locally and the [documentation index](docs/README.md) for operating and API references.
+
+## Rules engine assignment
+
+This copy adds a declarative rulebook layer and two correction features (FDSK-169 move a payment, FDSK-170 correct an overstated delivery). Start with [Evaluator notes](Evaluator_notes.md); the plain-language rules are in [docs/solution/rulebook.md](docs/solution/rulebook.md).
 
 ## Related
 
