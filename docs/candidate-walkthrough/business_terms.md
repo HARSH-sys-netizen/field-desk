@@ -15,10 +15,12 @@ Version **2026-10-26.1**. These terms name the current application's records and
 | Cancellation              | Recorded removal of unshipped demand.                                                                                                   |
 | Shipment; shipment line   | One physical batch and its loaded/dispatched units, price, reward rate, and commercial references.                                      |
 | Delivery                  | Incremental confirmation of dispatched units received by the customer.                                                                  |
+| Delivery correction       | A linked negative delivery that lowers an overstated confirmation; the units await delivery again.                                      |
 | Correction                | Authorized addition of physically dispatched units; retains evidence and the original documents.                                        |
 | Return; return line       | Previously delivered units received back, their gross value, and an explicit deduction.                                                 |
 | Charge; adjustment        | A delivery obligation or return fee; a signed adjustment retains its source charge.                                                     |
 | Receipt; cash allocation  | Customer money received; attribution of that money to a charge. An advance is unallocated receipt value.                                |
+| Payment transfer          | A receipt moved to the customer who actually paid; the original keeps its history and a linked receipt opens on the right account.      |
 | Credit note; funding      | Customer value reserved from identified receipts. It is not a new cash receipt.                                                         |
 | Credit application        | Credit used to settle a selected charge.                                                                                                |
 | Credit refund             | A recorded payout from funded credit, with a bank reference.                                                                            |
@@ -47,10 +49,12 @@ Admin can perform every listed action. The role column lists the other permitted
 | `START_LOADING`              | Warehouse       | Reserve units in a loading batch.                           |
 | `DISPATCH_SHIPMENT`          | Warehouse       | Confirm that the loaded batch left the warehouse.           |
 | `CONFIRM_DELIVERY`           | Warehouse       | Confirm some or all remaining dispatched units.             |
+| `CORRECT_DELIVERY`           | KAM             | Lower an overstated delivery confirmation.                  |
 | `RECORD_RETURN`              | Warehouse       | Receive delivered units back; record an explicit deduction. |
 | `CORRECT_DISPATCHED_ORDER`   | KAM             | Record authorized additional dispatched goods.              |
 | `RECEIVE_CUSTOMER_PAYMENT`   | Accounts        | Capture customer cash and allocate eligible value.          |
 | `ALLOCATE_PAYMENT`           | Accounts        | Allocate existing free cash.                                |
+| `MOVE_CUSTOMER_PAYMENT`      | Accounts        | Move a payment recorded against the wrong customer.         |
 | `ISSUE_CREDIT_NOTE`          | Accounts        | Reserve free receipt value as explicit credit.              |
 | `APPLY_CREDIT_NOTE`          | Accounts        | Settle a selected charge with credit.                       |
 | `REFUND_CREDIT_NOTE`         | Accounts        | Record a payout from available credit.                      |
@@ -64,7 +68,7 @@ Only Admin manages staff roles/status or chooses another active acting staff mem
 
 ## Operation boundary
 
-The listed CRM commands use the action endpoint. Customer creation is a separate endpoint. There is no Sales return-request stage, general receipt-edit action, or arbitrary historical shipment editor. Refund reversal and authorized extra-goods correction have the specific meanings above. Refunds record bookkeeping; they do not initiate bank transfers.
+The listed CRM commands use the action endpoint. Customer creation is a separate endpoint. There is no Sales return-request stage, general receipt-edit action, or arbitrary historical shipment editor; moving a payment between customers (`MOVE_CUSTOMER_PAYMENT`) and lowering an overstated delivery (`CORRECT_DELIVERY`) are the only correction operations for receipts and deliveries. Refund reversal and authorized extra-goods correction have the specific meanings above. Refunds record bookkeeping; they do not initiate bank transfers.
 
 ## Related
 

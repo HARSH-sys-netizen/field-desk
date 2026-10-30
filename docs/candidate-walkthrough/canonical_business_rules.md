@@ -1,6 +1,6 @@
 # Canonical business rules
 
-Operating conventions **2026-10-26.1**. Module policies precede intermodule workflows. See [Business terms](business_terms.md) for entities and roles, and [Appendix A](#appendix-a-notation) for notation.
+Operating conventions **2026-10-26.1**, extended with **ACC-004** and **FUL-007** for FDSK-169 and FDSK-170. Module policies precede intermodule workflows. See [Business terms](business_terms.md) for entities and roles, and [Appendix A](#appendix-a-notation) for notation.
 
 ## Module specifications
 
@@ -73,6 +73,14 @@ $$
 
 **FUL-006. Delivery.** Confirm quantities only on a `DISPATCHED` batch; set it to `DELIVERED` when all dispatched units are confirmed.
 
+**FUL-007. Delivery correction (FDSK-170).** With a reason, lower a shipment line's confirmed quantity on a `DISPATCHED` or `DELIVERED` batch from $d_h$ to $d'_h$:
+
+$$
+r_h\leq d'_h<d_h.
+$$
+
+Correct the latest confirmations first. Each corrected confirmation receives one linked negative delivery; **WF-005** gives it one negative adjustment of that confirmation's charge, and settlement above the retained value is released in the **WF-003** order. A `DELIVERED` batch with undelivered units returns to `DISPATCHED`; later confirmations follow **FUL-006**.
+
 ![Shipment lifecycle diagram](diagrams/shipment-lifecycle.svg)
 
 ### Returns
@@ -110,6 +118,14 @@ $$
 $$
 x=\min(u_i,b_j).
 $$
+
+**ACC-004. Payment move (FDSK-169).** With a reason, move a whole receipt recorded against the wrong customer to another existing customer. The receipt must not already be moved and must not fund credit (**CRD-001**). Release every allocation the receipt holds on the source account, record a transfer of its full amount $t_i$, and open a linked receipt on the receiving account with the same bank reference and receipt time. The source receipt's value becomes:
+
+$$
+m'_i=m_i-t_i=0,\qquad m_{i^*}=t_i.
+$$
+
+Apply **WF-002** on the receiving account only; points follow **REW-002**/**REW-003** on both accounts.
 
 ### Credits
 
@@ -185,7 +201,7 @@ $$
 
 ### Domain policies
 
-**WF-002. Cash allocation occasions.** Apply **ACC-003** after payment receipt, delivery confirmation, additional-goods correction, and completed return settlement, or on explicit allocation. Other operations do not trigger cash allocation.
+**WF-002. Cash allocation occasions.** Apply **ACC-003** after payment receipt, delivery confirmation, delivery correction, additional-goods correction, completed return settlement, and on the receiving account of a payment move, or on explicit allocation. Other operations do not trigger cash allocation.
 
 ### Transitions
 
@@ -199,7 +215,7 @@ For added quantity $q$, record a new approved revision and a dispatched suppleme
 
 Void all loading batches. Link the supplement to the identified existing dispatch and retain its time, or use the separate dispatch's actual time. Recognize supplied deliveries under **WF-005**; later confirmations follow **FUL-006**.
 
-**WF-005. Delivery recognition.** Recognize goods value only on confirmed delivery. Each confirmation creates exactly one goods charge at the shipment-line price:
+**WF-005. Delivery recognition.** Recognize goods value only on confirmed delivery. Each confirmation creates exactly one goods charge at the shipment-line price; each delivery correction (**FUL-007**, negative $q_e$) creates exactly one negative adjustment of the corrected confirmation's charge:
 
 $$
 \operatorname{value}(\operatorname{charge}(e))=q_ep_h,
