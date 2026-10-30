@@ -59,6 +59,20 @@ export const crmActionSchema = z.discriminatedUnion('type', [
       .min(1)
       .max(100),
   }),
+  action('CORRECT_DELIVERY', {
+    orderId: id,
+    shipmentId: id,
+    items: z
+      .array(
+        z.object({
+          shipmentLineId: id,
+          deliveredQty: z.number().int().min(0).max(10000),
+        }),
+      )
+      .min(1)
+      .max(100),
+    reason,
+  }),
   action('CANCEL_REMAINDER', {
     orderId: id,
     reason,

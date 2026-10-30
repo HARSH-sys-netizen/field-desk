@@ -8,6 +8,7 @@ import { AccountsService } from '../accounts/accounts.service.js';
 import { RewardsService } from '../rewards/rewards.service.js';
 import { CatalogRepository } from '../catalog/catalog.repository.js';
 import { ReturnsRepository } from '../returns/returns.repository.js';
+import { SettlementService } from '../settlement/settlement.service.js';
 import type { ActionContext as Context, Payload } from '../common/domain.js';
 import {
   authorize,
@@ -28,6 +29,7 @@ export class FulfillmentService {
     private readonly rewardsService: RewardsService,
     private readonly catalogRepository: CatalogRepository,
     private readonly returnsRepository: ReturnsRepository,
+    private readonly settlement: SettlementService,
   ) {}
   load(c: Context, p: Payload<'START_LOADING'>) {
     authorize(c, 'WAREHOUSE', 'ADMIN');
@@ -161,6 +163,100 @@ export class FulfillmentService {
       this.fulfillmentRepository.updateShipment(c, shipment.id, {
         status: 'DELIVERED',
       });
+
+    this.accountsService.allocateCash(c);
+
+    this.rewardsService.refresh(c);
+  }
+  /**
+   * FDSK-170. Lower an overstated delivery confirmation. Each affected
+   * confirmation gets a linked negative delivery (WF-001), and WF-005 holds for
+   * it: exactly one charge entry of q × p, here a negative adjustment of the
+   * confirmation's own charge. Settlement above the corrected value is
+   * released (WF-003 order). Latest confirmations are corrected first. The
+   * units become awaiting delivery again; Warehouse confirms them later under
+   * FUL-006.
+   */
+  correctDelivery(c: Context, p: Payload<'CORRECT_DELIVERY'>) {
+    authorize(c, 'KAM', 'ADMIN');
+    const order = useOrder(c, this.ordersRepository.findById(p.orderId));
+    const shipment = this.fulfillmentRepository.findForOrder(
+      p.shipmentId,
+      order.id,
+    );
+    if (!shipment || !['DISPATCHED', 'DELIVERED'].includes(shipment.status))
+      fail('SHIPMENT_STATE', 'Select a dispatched shipment of this order');
+    distinct(p.items.map((item) => item.shipmentLineId));
+    const released = new Map<string, number>();
+    for (const item of p.items) {
+      const line = this.fulfillmentRepository.findInShipment(
+        item.shipmentLineId,
+        shipment.id,
+      );
+      if (!line)
+        fail(
+          'LINE_NOT_FOUND',
+          'The shipment line does not belong to this shipment',
+        );
+      new ShipmentQuantity(
+        line.dispatched_qty,
+        this.fulfillmentRepository.deliveredForShipmentLine(line.id),
+      ).assertCorrectable(
+        item.deliveredQty,
+        this.returnsRepository.returnedForShipmentLine(line.id),
+      );
+      let excess =
+        this.fulfillmentRepository.deliveredForShipmentLine(line.id) -
+        item.deliveredQty;
+      for (const charge of this.accountsRepository
+        .chargesForShipmentLine(line.id)
+        .reverse()) {
+        if (!excess) break;
+        const retainedUnits = Math.floor(
+          this.settlement.balance(charge.id, charge.amount_paise)
+            .retainedPaise / line.unit_price_paise,
+        );
+        const units = Math.min(
+          excess,
+          retainedUnits,
+          this.fulfillmentRepository.unreversedDelivery(charge.source_id),
+        );
+        if (units <= 0) continue;
+        const correctionId = randomUUID();
+        this.fulfillmentRepository.insertDelivery(c, {
+          id: correctionId,
+          shipment_line_id: line.id,
+          order_id: order.id,
+          qty: -units,
+          corrects_delivery_id: charge.source_id,
+          reason: p.reason,
+          action_id: c.id,
+          created_at: c.now,
+        });
+        this.settlement.reduce(
+          c,
+          charge,
+          safe(units * line.unit_price_paise),
+          'DELIVERY_CORRECTION',
+          correctionId,
+          released,
+        );
+        excess -= units;
+      }
+      if (excess)
+        fail(
+          'CHARGE_MISMATCH',
+          'Delivered charges do not cover this correction',
+        );
+    }
+    if (
+      shipment.status === 'DELIVERED' &&
+      this.fulfillmentRepository.undeliveredForShipment(shipment.id) > 0
+    )
+      this.fulfillmentRepository.updateShipment(c, shipment.id, {
+        status: 'DISPATCHED',
+      });
+    c.references.shipmentId = shipment.id;
 
     this.accountsService.allocateCash(c);
 

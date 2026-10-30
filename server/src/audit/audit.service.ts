@@ -70,9 +70,11 @@ export class AuditService {
       reason =
         row.kind === 'RETURN'
           ? `Returned goods reduce charge ${row.adjusts_id} by ${-Number(row.amount_paise)} paise; the original charge remains recorded.`
-          : row.kind === 'RETURN_FEE'
-            ? `Return ${row.source_id} incurs the recorded deduction of ${row.amount_paise} paise.`
-            : `Confirmed delivery ${row.source_id} recognizes ${row.amount_paise} paise for shipment line ${row.shipment_line_id}; unconfirmed units create no charge.`;
+          : row.kind === 'DELIVERY_CORRECTION'
+            ? `Delivery correction ${row.source_id} reduces charge ${row.adjusts_id} by ${-Number(row.amount_paise)} paise for units that were not delivered; the original charge remains recorded.`
+            : row.kind === 'RETURN_FEE'
+              ? `Return ${row.source_id} incurs the recorded deduction of ${row.amount_paise} paise.`
+              : `Confirmed delivery ${row.source_id} recognizes ${row.amount_paise} paise for shipment line ${row.shipment_line_id}; unconfirmed units create no charge.`;
     } else if (table === 'payment_allocations') {
       reason =
         Number(row.amount_paise) > 0
@@ -100,6 +102,8 @@ export class AuditService {
       reason = `Receive ${row.amount_paise} paise against customer ${row.customer_id}, reference ${row.reference}. No order is selected at capture.`;
     } else if (table === 'cancellations') {
       reason = `Cancel ${row.qty} unshipped units of line ${row.line_key}; dispatched and delivered quantities remain historical facts.`;
+    } else if (table === 'deliveries' && Number(row.qty) < 0) {
+      reason = `Correct an overstated confirmation: ${-Number(row.qty)} units of delivery ${row.corrects_delivery_id} on shipment line ${row.shipment_line_id} were not delivered and are awaiting delivery again.`;
     } else if (table === 'deliveries') {
       reason = `Confirm ${row.qty} delivered units on shipment line ${row.shipment_line_id}; each confirmation creates one incremental goods charge.`;
     } else if (table === 'approvals') {

@@ -6,6 +6,7 @@ import {
   getTableColumns,
   isNotNull,
   ne,
+  or,
   sum,
 } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service.js';
@@ -113,6 +114,21 @@ export class FulfillmentRepository {
         .select({ value: sum(crmDeliveries.qty).mapWith(Number) })
         .from(crmDeliveries)
         .where(eq(crmDeliveries.shipment_line_id, lineId))
+        .get()?.value ?? 0,
+    );
+  }
+  /** A confirmation's quantity less the corrections already linked to it. */
+  unreversedDelivery(deliveryId: string) {
+    return safe(
+      this.db
+        .select({ value: sum(crmDeliveries.qty).mapWith(Number) })
+        .from(crmDeliveries)
+        .where(
+          or(
+            eq(crmDeliveries.id, deliveryId),
+            eq(crmDeliveries.corrects_delivery_id, deliveryId),
+          ),
+        )
         .get()?.value ?? 0,
     );
   }
