@@ -1,4 +1,3 @@
-import { fail } from '../common/domain.js';
 import { sql } from 'drizzle-orm';
 import {
   check,
@@ -168,38 +167,3 @@ export function fulfillmentState(
 }
 export type Order = typeof crmOrders.$inferSelect;
 export type CommercialLine = typeof crmOrderLines.$inferSelect;
-
-export class OrderModel {
-  constructor(readonly record: Order) {}
-  assertEditable(hasDispatch: boolean, hasCancellation: boolean) {
-    if (hasDispatch)
-      fail(
-        'ORDER_DISPATCHED',
-        'Dispatched orders require an authorized shipment correction',
-      );
-    if (this.record.status === 'CANCELLED' || hasCancellation)
-      fail('ORDER_CANCELLED', 'Canceled quantities cannot be edited');
-  }
-  assertSubmittable() {
-    if (
-      !['DRAFT', 'REJECTED', 'REAPPROVAL_REQUIRED'].includes(this.record.status)
-    )
-      fail('ORDER_STATE', 'This order is not awaiting submission');
-  }
-  assertReviewable(revision: number, decision: 'APPROVED' | 'REJECTED') {
-    if (!['PENDING', 'REAPPROVAL_REQUIRED'].includes(this.record.status))
-      fail(
-        'ORDER_STATE',
-        decision === 'APPROVED'
-          ? 'Submit the current revision for approval first'
-          : 'The order is not awaiting approval',
-      );
-    if (revision !== this.record.current_revision)
-      fail(
-        'REVISION_CONFLICT',
-        decision === 'APPROVED'
-          ? 'Approve the current commercial revision'
-          : 'Review the current commercial revision',
-      );
-  }
-}

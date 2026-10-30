@@ -16,7 +16,7 @@ import { FulfillmentRepository } from '../fulfillment/fulfillment.repository.js'
 import { DatabaseService } from '../database/database.service.js';
 import { SettlementService } from '../settlement/settlement.service.js';
 import type { ActionContext as Context, Payload } from '../common/domain.js';
-import { authorize, useCustomer, fail, safe } from '../common/domain.js';
+import { useCustomer, fail, safe } from '../common/domain.js';
 
 @Injectable()
 export class AccountsService {
@@ -32,7 +32,6 @@ export class AccountsService {
     private readonly settlement: SettlementService,
   ) {}
   receive(c: Context, p: Payload<'RECEIVE_CUSTOMER_PAYMENT'>) {
-    authorize(c, 'ACCOUNTS', 'ADMIN');
     useCustomer(c, this.customersRepository.findById(p.customerId));
     const receiptId = randomUUID();
     c.references.receiptId = receiptId;
@@ -44,18 +43,6 @@ export class AccountsService {
       action_id: c.id,
       created_at: c.now,
     });
-
-    this.allocateCash(c);
-
-    this.rewardsService.refresh(c);
-  }
-  allocate(c: Context, p: Payload<'ALLOCATE_PAYMENT'>) {
-    authorize(c, 'ACCOUNTS', 'ADMIN');
-    useCustomer(c, this.customersRepository.findById(p.customerId));
-
-    this.allocateCash(c);
-
-    this.rewardsService.refresh(c);
   }
   /**
    * FDSK-169. A payment was recorded against the wrong customer. History is
@@ -67,34 +54,12 @@ export class AccountsService {
    * Points earned from the moved cash follow REW-002/REW-003 on both sides.
    */
   move(c: Context, p: Payload<'MOVE_CUSTOMER_PAYMENT'>) {
-    authorize(c, 'ACCOUNTS', 'ADMIN');
     useCustomer(c, this.customersRepository.findById(p.customerId));
-    if (p.targetCustomerId === c.customerId)
-      fail(
-        'SAME_CUSTOMER',
-        'Choose a different customer to receive the payment',
-      );
-    const target = this.customersRepository.findById(p.targetCustomerId);
-    if (!target) fail('NOT_FOUND', 'Target customer not found');
+    const target = this.customersRepository.findById(p.targetCustomerId)!;
     const receipt = this.accountsRepository.findCustomerReceipt(
       p.receiptId,
       c.customerId,
-    );
-    if (!receipt)
-      fail(
-        'RECEIPT_NOT_FOUND',
-        'Select a payment recorded against this customer',
-      );
-    if (this.accountsRepository.transferOfReceipt(receipt.id))
-      fail(
-        'RECEIPT_MOVED',
-        'This payment has already been moved to another customer',
-      );
-    if (this.creditsRepository.reservedFromReceipt(receipt.id))
-      fail(
-        'RECEIPT_FUNDS_CREDIT',
-        'This payment funds a credit note on this account; settle or refund that credit through Accounts before moving the payment',
-      );
+    )!;
     const transferId = randomUUID();
     for (const allocation of this.accountsRepository.cashByChargeForReceipt(
       receipt.id,
@@ -132,11 +97,6 @@ export class AccountsService {
     c.references.transferId = transferId;
     c.references.receiptId = movedReceiptId;
     c.references.targetCustomerId = target.id;
-
-    this.allocateCash(c, target.id);
-
-    this.rewardsService.refresh(c);
-    this.rewardsService.refresh(c, target.id);
   }
   allocateCash(c: Context, customerId = c.customerId) {
     for (const receipt of this.accountsRepository.receiptsForCustomer(

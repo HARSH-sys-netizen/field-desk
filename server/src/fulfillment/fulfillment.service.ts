@@ -11,7 +11,6 @@ import { ReturnsRepository } from '../returns/returns.repository.js';
 import { SettlementService } from '../settlement/settlement.service.js';
 import type { ActionContext as Context, Payload } from '../common/domain.js';
 import {
-  authorize,
   useOrder,
   fail,
   safe,
@@ -32,13 +31,7 @@ export class FulfillmentService {
     private readonly settlement: SettlementService,
   ) {}
   load(c: Context, p: Payload<'START_LOADING'>) {
-    authorize(c, 'WAREHOUSE', 'ADMIN');
     const order = useOrder(c, this.ordersRepository.findById(p.orderId));
-    if (
-      order.status !== 'APPROVED' ||
-      !this.ordersRepository.approvalCount(order.id, order.current_revision)
-    )
-      fail('APPROVAL_REQUIRED', 'The current revision needs approval');
     distinct(p.items.map((item) => item.lineKey));
     const lines = this.ordersRepository.currentLines(
       order.id,
@@ -84,20 +77,11 @@ export class FulfillmentService {
     }
   }
   dispatch(c: Context, p: Payload<'DISPATCH_SHIPMENT'>) {
-    authorize(c, 'WAREHOUSE', 'ADMIN');
     const order = useOrder(c, this.ordersRepository.findById(p.orderId));
     const shipment = this.fulfillmentRepository.findForOrder(
       p.shipmentId,
       order.id,
-    );
-    if (!shipment || shipment.status !== 'LOADING')
-      fail('SHIPMENT_STATE', 'Select a shipment that is loading');
-    if (
-      order.status !== 'APPROVED' ||
-      shipment.revision !== order.current_revision ||
-      !this.ordersRepository.approvalCount(order.id, order.current_revision)
-    )
-      fail('APPROVAL_REQUIRED', 'The loading document needs current approval');
+    )!;
     this.fulfillmentRepository.updateShipment(c, shipment.id, {
       status: 'DISPATCHED',
       dispatched_at: c.now,
@@ -108,14 +92,11 @@ export class FulfillmentService {
       });
   }
   deliver(c: Context, p: Payload<'CONFIRM_DELIVERY'>) {
-    authorize(c, 'WAREHOUSE', 'ADMIN');
     const order = useOrder(c, this.ordersRepository.findById(p.orderId));
     const shipment = this.fulfillmentRepository.findForOrder(
       p.shipmentId,
       order.id,
-    );
-    if (!shipment || shipment.status !== 'DISPATCHED')
-      fail('SHIPMENT_STATE', 'Select an open dispatched shipment');
+    )!;
     distinct(p.items.map((item) => item.shipmentLineId));
     for (const item of p.items) {
       const line = this.fulfillmentRepository.findInShipment(
@@ -163,10 +144,6 @@ export class FulfillmentService {
       this.fulfillmentRepository.updateShipment(c, shipment.id, {
         status: 'DELIVERED',
       });
-
-    this.accountsService.allocateCash(c);
-
-    this.rewardsService.refresh(c);
   }
   /**
    * FDSK-170. Lower an overstated delivery confirmation. Each affected
@@ -178,14 +155,11 @@ export class FulfillmentService {
    * FUL-006.
    */
   correctDelivery(c: Context, p: Payload<'CORRECT_DELIVERY'>) {
-    authorize(c, 'KAM', 'ADMIN');
     const order = useOrder(c, this.ordersRepository.findById(p.orderId));
     const shipment = this.fulfillmentRepository.findForOrder(
       p.shipmentId,
       order.id,
-    );
-    if (!shipment || !['DISPATCHED', 'DELIVERED'].includes(shipment.status))
-      fail('SHIPMENT_STATE', 'Select a dispatched shipment of this order');
+    )!;
     distinct(p.items.map((item) => item.shipmentLineId));
     const released = new Map<string, number>();
     for (const item of p.items) {
@@ -257,22 +231,12 @@ export class FulfillmentService {
         status: 'DISPATCHED',
       });
     c.references.shipmentId = shipment.id;
-
-    this.accountsService.allocateCash(c);
-
-    this.rewardsService.refresh(c);
   }
   correct(c: Context, p: Payload<'CORRECT_DISPATCHED_ORDER'>) {
-    authorize(c, 'KAM', 'ADMIN');
     const order = useOrder(c, this.ordersRepository.findById(p.orderId));
     const shipments = this.fulfillmentRepository.dispatchedForOrderDocuments(
       order.id,
     );
-    if (!shipments.length)
-      fail(
-        'ORDER_NOT_DISPATCHED',
-        'Use an ordinary commercial edit before dispatch',
-      );
     if (!p.location || (p.location === 'EXISTING_SHIPMENT' && !p.shipmentId))
       throw new Decision([
         {
@@ -452,10 +416,6 @@ export class FulfillmentService {
         });
       }
     }
-
-    this.accountsService.allocateCash(c);
-
-    this.rewardsService.refresh(c);
   }
   forOrder(orderId: string) {
     if (!this.ordersRepository.findById(orderId))

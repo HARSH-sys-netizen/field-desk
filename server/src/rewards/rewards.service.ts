@@ -9,7 +9,7 @@ import { OrdersRepository } from '../orders/orders.repository.js';
 import { ReturnsRepository } from '../returns/returns.repository.js';
 import { SettlementService } from '../settlement/settlement.service.js';
 import type { ActionContext as Context, Payload } from '../common/domain.js';
-import { authorize, useCustomer, fail, safe } from '../common/domain.js';
+import { useCustomer, fail, safe } from '../common/domain.js';
 
 @Injectable()
 export class RewardsService {
@@ -23,11 +23,9 @@ export class RewardsService {
     private readonly settlement: SettlementService,
   ) {}
   redeem(c: Context, p: Payload<'REDEEM_POINTS'>) {
-    authorize(c, 'SALES', 'ACCOUNTS', 'ADMIN');
     useCustomer(c, this.customersRepository.findById(p.customerId));
     const balance = this.rewardsRepository.availableForCustomer(c.customerId);
-    const debt = this.rewardsRepository.debtForCustomer(c.customerId);
-    if (debt || p.points > balance)
+    if (p.points > balance)
       fail('POINTS_UNAVAILABLE', 'There are not enough available points');
     const charge = this.accountsRepository.findCustomerCharge(
       p.chargeId,
